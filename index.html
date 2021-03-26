@@ -1,0 +1,82 @@
+<p>Creates a bunch of rows and then recursively divides them into chunks and then chunks of chunks and so on until the number of elements per "leaf chunk" is that of the value specified below. Each chunk has content-visibility:auto so there's no layout/rendering cost for the vast majority (99.99...%) of leaf rows. Should really only be limited by the memory required to store the divs. See <a href="https://github.com/josephrocca/a-billion-divs-with-content-visibility-auto">readme</a> for more info.</p>
+<hr>
+<div id=inputEl>
+  <input id=cvEnabledEl type=checkbox checked/> content-visibility:auto ?<br>
+  number of rows: <input id=numRowsEl type=number value="5000000"/><br>
+  rows per leaf chunk: <input id=elementsPerLeafEl type=number value="1000"/><br>
+  <button onclick="rowsCtnEl.innerHTML=''; statsEl.innerHTML='starting...<br>'; setTimeout(render,10)">render</button>
+</div>
+<div id=statsEl></div>
+<hr>
+<div id=rowsCtnEl></div>
+
+<style>
+  #rowsCtnEl .row {
+    height: 20px;
+    
+  }
+  #rowsCtnEl .row-cv-auto {
+    height: 20px;
+    content-visibility: var(--cv);
+    contain-intrinsic-size: 100vw 20px;
+  }
+  #rowsCtnEl .chunk-ctn {
+    content-visibility: var(--cv);
+  }
+</style>
+
+<script>
+  function rowsToChunkedHtml(rows) {
+    function chunk(rows) {
+      if(rows.length <= Number(elementsPerLeafEl.value)) {
+        return rows.map(r => `<div class="row-cv-auto">${r.content}</div>`).join("");
+      } else {
+        let l = rows.length;
+        return [rows.slice(0, l/2), rows.slice(l/2)].map(c => `<div class="chunk-ctn" style="contain-intrinsic-size: 100vw ${20*c.length}px;">${chunk(c)}</div>`).join("");
+      }
+    }
+    return chunk(rows);
+  }
+
+  async function render() {
+    statsEl.innerHTML = "";
+    let t;
+
+    document.documentElement.style.setProperty('--cv', cvEnabledEl.checked ? "auto" : "visible");
+
+    t = performance.now();
+    let numRows = Number(numRowsEl.value);
+    let rows = [];
+    for(let i = 0; i < numRows; i++) {
+      rows.push({content:Math.random()});
+    }
+    statsEl.innerHTML += `creating row objects took <b>${(performance.now()-t).toFixed(2)}ms</b><br>`;
+
+    // to avoid reaching max string length, we need to break rows into separate strings, each with up to 4 million rows:
+    t = performance.now();
+    let htmlStrings = [];
+    while(rows.length > 0) {
+      let someRows = rows.splice(-4e6);
+      htmlStrings.push( rowsToChunkedHtml(someRows) );
+    }
+    statsEl.innerHTML += `generating HTML strings took <b>${(performance.now()-t).toFixed(2)}ms</b><br>`;
+
+    t = performance.now();
+    let wrappers = [];
+    for(let html of htmlStrings) {
+      let w = document.createElement("div");
+      w.innerHTML = html;
+      wrappers.push(w);
+    }
+    statsEl.innerHTML += `creating DOM nodes took <b>${(performance.now()-t).toFixed(2)}ms</b><br>`;
+
+    t = performance.now();
+    rowsCtnEl.appendChild(...wrappers);
+    await sleep(1); // <-- needed to prevent browser from merging the above and below DOM operations (which ruins out timing measurement)
+    statsEl.innerHTML += `render/layout took <b>${(performance.now()-t).toFixed(2)}ms</b><br>`;
+  }
+
+  function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+  }
+</script>
