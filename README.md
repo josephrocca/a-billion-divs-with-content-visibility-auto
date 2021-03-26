@@ -1,2 +1,13 @@
-# a-billion-divs-with-content-visibility-auto
-An attempt at a billion divs with content-visibility:auto
+https://josephrocca.github.io/a-billion-divs-with-content-visibility-auto/
+
+Part of an exploration based on what I thought might have been [a Chromium bug](https://bugs.chromium.org/p/chromium/issues/detail?id=1192080) related to the new content-visibility:auto.
+
+A Chromium contributor (see Chromium bug link) came up with the idea that you could nest content-visibility:auto divs in a hierarchy such that there's basically no layout/render time for the vast majority of elements (it's not enough to simply add content-visibility:auto to each div, as explained in the Chromium bug link). That means that the number of elements on the page is really only limited by the amount of memory your device has.
+
+I was hoping to get to a billion elements just for fun, but very quickly reached an apparent semi-arbitrary V8 DOM-node limit of roughly 2^24 (guessing it's the same reasoning as here: https://stackoverflow.com/a/54466812/11950764). With content-visibility:auto I can get to about 7 million elements (roughly half of 2^24 - I think because of the text nodes within divs) before a browser crash. Without content-visibility:auto the browser crashes at about 700,000 elements. The latter takes about 10,000ms to layout/render whereas with content-visibility:auto layout/render never takes more than about 150ms, regardless of the number of elements.
+
+But beyond about 50,000 elements the content-visibility:auto approach becomes dominated by the time required to actually create the elements rather than render/layout (which only take about 15% of load time). If the whole document were downloaded (or even just the data to render it) it would be a several-hundred MB download, so the download time would probably dominate for most users (not that any real-world application would load so many elements).
+
+I tried to generate nodes directly (with document.createElement) rather than creating a big string for the browser to parse, but that ended up being really slow. Initially counter-intuitive because I'd have thought that parsing the generated text to make the nodes would be slow relative to creating the nodes directly, but I guess the parser has been very well optimised and is running in native code rather than slower JS code.
+
+One strange thing I noticed is that if you render the page with 5 million elements, and then download it (with right-click, save as), then when you try to load up that pre-rendered file in the browser, it takes a very long time (more than a minute) and then it crashes. Looking at the performance recording it says that it was all spent on rendering. I'd have thought it'd be able to render about as fast as the dynamically-generated case since it's just loading from disk. It's about 200Mb, so it should load into memory in much less than a second, and at that point it seems like it has the same work to do as the dynamically-generated case (i.e. parsing a huge string).
